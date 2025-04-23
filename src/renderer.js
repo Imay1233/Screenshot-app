@@ -13,8 +13,6 @@ saveBtn.addEventListener('click', saveScreenshot);
 
 // Start the capture process
 function startCapture() {
-  // Here we need to tell the main process to create the overlay window
-  // instead of just sending the captureScreen event
   window.electronAPI.startCapture();
 }
 

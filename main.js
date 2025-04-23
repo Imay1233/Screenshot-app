@@ -54,7 +54,7 @@ function createOverlayWindow() {
   overlayWindow.loadFile(path.join(__dirname, 'src', 'overlay.html'));
 
   // Set the window as frameless and totally transparent
-  overlayWindow.setOpacity(0.3); // Try a partial opacity to see if it's working at all
+  //overlayWindow.setOpacity(0.8); // Try a partial opacity to see if it's working at all
   
   if (isDev) {
     overlayWindow.webContents.openDevTools();
