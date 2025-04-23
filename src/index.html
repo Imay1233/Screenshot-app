@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Electron Screenshot App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Screenshot Capture App</h1>
+    </header>
+    
+    <main>
+      <div class="instruction-panel">
+        <h2>How to use:</h2>
+        <ol>
+          <li>Press <kbd>Ctrl+Shift+X</kbd> (or <kbd>Cmd+Shift+X</kbd> on Mac) to start capture</li>
+          <li>Draw a rectangle on your screen to select the area</li>
+          <li>The screenshot will appear below</li>
+          <li>Press the save button to save it to your downloads folder</li>
+        </ol>
+        <button id="capture-btn" class="btn primary">Take Screenshot</button>
+      </div>
+      
+      <div class="preview-panel">
+        <h2>Preview:</h2>
+        <div id="screenshot-container" class="screenshot-container">
+          <p class="placeholder-text">Your screenshot will appear here</p>
+          <img id="screenshot-preview" class="hidden">
+        </div>
+        <div class="actions">
+          <button id="save-btn" class="btn" disabled>Save Screenshot</button>
+        </div>
+      </div>
+    </main>
+    
+    <footer>
+      <p>Press ESC to cancel capture</p>
+    </footer>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

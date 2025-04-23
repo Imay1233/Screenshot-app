@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screen Capture Overlay</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      cursor: crosshair;
+      background: none;
+    }
+    
+    .selection-box {
+      position: absolute;
+      border: 2px dashed #00a8ff;
+      background: rgba(0, 168, 255, 0.1);
+      display: none;
+      pointer-events: none;
+    }
+    
+    .instruction {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-family: Arial, sans-serif;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+  <div class="instruction">Click and drag to select area, press ESC to cancel</div>
+  <div id="selection-box" class="selection-box"></div>
+  
+  <script>
+    const selectionBox = document.getElementById('selection-box');
+    let startX, startY, endX, endY;
+    let isSelecting = false;
+    
+    // Listen for key presses (ESC to cancel)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        window.electronAPI.cancelScreenshot();
+      }
+    });
+    
+    // Mouse events for selection
+    document.addEventListener('mousedown', (e) => {
+      isSelecting = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      
+      selectionBox.style.left = `${startX}px`;
+      selectionBox.style.top = `${startY}px`;
+      selectionBox.style.width = '0';
+      selectionBox.style.height = '0';
+      selectionBox.style.display = 'block';
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isSelecting) return;
+      
+      endX = e.clientX;
+      endY = e.clientY;
+      
+      const width = Math.abs(endX - startX);
+      const height = Math.abs(endY - startY);
+      
+      selectionBox.style.left = `${Math.min(startX, endX)}px`;
+      selectionBox.style.top = `${Math.min(startY, endY)}px`;
+      selectionBox.style.width = `${width}px`;
+      selectionBox.style.height = `${height}px`;
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (!isSelecting) return;
+      isSelecting = false;
+      
+      const captureArea = {
+        x: parseInt(selectionBox.style.left),
+        y: parseInt(selectionBox.style.top),
+        width: parseInt(selectionBox.style.width),
+        height: parseInt(selectionBox.style.height)
+      };
+      
+      // Only capture if we have a valid selection
+      if (captureArea.width > 10 && captureArea.height > 10) {
+        window.electronAPI.captureScreen(captureArea);
+      } else {
+        window.electronAPI.cancelScreenshot();
+      }
+    });
+  </script>
+</body>
+</html>
