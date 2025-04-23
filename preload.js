@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startCapture: () => ipcRenderer.send('start-capture'),
   handleSourcesFetched: (callback) => ipcRenderer.on('sources-fetched', callback),
   saveScreenshot: (data) => ipcRenderer.invoke('save-screenshot', data),
+  showMainWindow: () => ipcRenderer.send('show-main-window'), // New method to show main window
   
   // Overlay window functions
   cancelScreenshot: () => ipcRenderer.send('cancel-screenshot')

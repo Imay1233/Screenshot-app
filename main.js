@@ -70,7 +70,8 @@ app.whenReady().then(() => {
   
   // Register a global shortcut for taking screenshots
   globalShortcut.register('CommandOrControl+Shift+X', () => {
-    if (!overlayWindow) {
+    if (!overlayWindow && mainWindow) {
+      mainWindow.hide();
       createOverlayWindow();
     }
   });
@@ -103,6 +104,11 @@ ipcMain.on('capture-screen', async (event, captureArea) => {
       overlayWindow.close();
     }
     
+    // Show the main window when capture is canceled
+    //if (mainWindow) {
+      //mainWindow.show();
+    //}
+
     // Make sure captureArea is defined before sending
     if (captureArea && captureArea.width > 0 && captureArea.height > 0) {
       // Send the sources to the renderer process
@@ -113,8 +119,16 @@ ipcMain.on('capture-screen', async (event, captureArea) => {
   }
 });
 
+// New handler to show the main window after capture
+ipcMain.on('show-main-window', () => {
+  if (mainWindow) {
+    mainWindow.show();
+  }
+});
+
 ipcMain.on('start-capture', () => {
-  if (!overlayWindow) {
+  if (!overlayWindow && mainWindow) {
+    mainWindow.hide();
     createOverlayWindow();
   }
 });
@@ -141,5 +155,9 @@ ipcMain.handle('save-screenshot', async (event, data) => {
 ipcMain.on('cancel-screenshot', () => {
   if (overlayWindow) {
     overlayWindow.close();
+  }
+  // Show the main window when capture is canceled
+  if (mainWindow) {
+    mainWindow.show();
   }
 });
