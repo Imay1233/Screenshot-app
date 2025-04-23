@@ -54,7 +54,7 @@ function createOverlayWindow() {
   overlayWindow.loadFile(path.join(__dirname, 'src', 'overlay.html'));
 
   // Set the window as frameless and totally transparent
-  overlayWindow.setOpacity(0.3); // Try a partial opacity to see if it's working at all
+  //overlayWindow.setOpacity(0.8); // Try a partial opacity to see if it's working at all
   
   if (isDev) {
     overlayWindow.webContents.openDevTools();
@@ -70,7 +70,8 @@ app.whenReady().then(() => {
   
   // Register a global shortcut for taking screenshots
   globalShortcut.register('CommandOrControl+Shift+X', () => {
-    if (!overlayWindow) {
+    if (!overlayWindow && mainWindow) {
+      mainWindow.hide();
       createOverlayWindow();
     }
   });
@@ -103,6 +104,11 @@ ipcMain.on('capture-screen', async (event, captureArea) => {
       overlayWindow.close();
     }
     
+    // Show the main window when capture is canceled
+    if (mainWindow) {
+      mainWindow.show();
+    }
+
     // Make sure captureArea is defined before sending
     if (captureArea && captureArea.width > 0 && captureArea.height > 0) {
       // Send the sources to the renderer process
@@ -114,7 +120,8 @@ ipcMain.on('capture-screen', async (event, captureArea) => {
 });
 
 ipcMain.on('start-capture', () => {
-  if (!overlayWindow) {
+  if (!overlayWindow && mainWindow) {
+    mainWindow.hide();
     createOverlayWindow();
   }
 });
@@ -141,5 +148,9 @@ ipcMain.handle('save-screenshot', async (event, data) => {
 ipcMain.on('cancel-screenshot', () => {
   if (overlayWindow) {
     overlayWindow.close();
+  }
+  // Show the main window when capture is canceled
+  if (mainWindow) {
+    mainWindow.show();
   }
 });
