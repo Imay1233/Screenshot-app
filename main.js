@@ -3,9 +3,10 @@ const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
 
-// Keep a global reference of the windows
 let mainWindow;
 let overlayWindow;
+
+const enableDevTools = isDev && process.env.ENABLE_DEVTOOLS !== 'false';
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -20,7 +21,7 @@ function createMainWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   
-  if (isDev) {
+  if (enableDevTools) {
     mainWindow.webContents.openDevTools();
   }
 
@@ -29,9 +30,25 @@ function createMainWindow() {
   });
 }
 
-function createOverlayWindow() {
+async function captureDesktopScreenshot() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.size;
+  
+  const sources = await desktopCapturer.getSources({
+    types: ['screen'],
+    thumbnailSize: { width, height }
+  });
+  
+  const primarySource = sources[0];
+  return primarySource.thumbnail.toDataURL();
+}
+
+async function createOverlayWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
+
+  // Capture a screenshot of the desktop
+  const screenshotDataUrl = await captureDesktopScreenshot();
 
   overlayWindow = new BrowserWindow({
     width,
@@ -48,15 +65,15 @@ function createOverlayWindow() {
     }
   });
 
-   // Set the window to be completely click-through except for the selection box
   overlayWindow.setIgnoreMouseEvents(false);
-
   overlayWindow.loadFile(path.join(__dirname, 'src', 'overlay.html'));
-
-  // Set the window as frameless and totally transparent
-  //overlayWindow.setOpacity(0.8); // Try a partial opacity to see if it's working at all
   
-  if (isDev) {
+  // Send the screenshot data to the overlay window
+  overlayWindow.webContents.on('did-finish-load', () => {
+    overlayWindow.webContents.send('set-background-screenshot', screenshotDataUrl);
+  });
+  
+  if (enableDevTools) {
     overlayWindow.webContents.openDevTools();
   }
 
@@ -68,7 +85,6 @@ function createOverlayWindow() {
 app.whenReady().then(() => {
   createMainWindow();
   
-  // Register a global shortcut for taking screenshots
   globalShortcut.register('CommandOrControl+Shift+X', () => {
     if (!overlayWindow && mainWindow) {
       mainWindow.hide();
@@ -89,29 +105,18 @@ app.on('activate', () => {
   }
 });
 
-// Handle capture request
-// Handle capture request
 ipcMain.on('capture-screen', async (event, captureArea) => {
   try {
-    // Get the available sources (screens)
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: { width: 0, height: 0 }
     });
     
-    // Close the overlay window after selection
     if (overlayWindow) {
       overlayWindow.close();
     }
     
-    // Show the main window when capture is canceled
-    //if (mainWindow) {
-      //mainWindow.show();
-    //}
-
-    // Make sure captureArea is defined before sending
     if (captureArea && captureArea.width > 0 && captureArea.height > 0) {
-      // Send the sources to the renderer process
       mainWindow.webContents.send('sources-fetched', sources, captureArea);
     }
   } catch (error) {
@@ -119,7 +124,6 @@ ipcMain.on('capture-screen', async (event, captureArea) => {
   }
 });
 
-// New handler to show the main window after capture
 ipcMain.on('show-main-window', () => {
   if (mainWindow) {
     mainWindow.show();
@@ -133,13 +137,11 @@ ipcMain.on('start-capture', () => {
   }
 });
 
-// Handle screenshot saving
 ipcMain.handle('save-screenshot', async (event, data) => {
   const downloadsPath = app.getPath('downloads');
   const timestamp = new Date().toISOString().replace(/:/g, '-');
   const filePath = path.join(downloadsPath, `screenshot-${timestamp}.png`);
   
-  // Remove the data URL prefix
   const base64Data = data.replace(/^data:image\/png;base64,/, '');
   
   try {
@@ -151,12 +153,10 @@ ipcMain.handle('save-screenshot', async (event, data) => {
   }
 });
 
-// Cancel screenshot
 ipcMain.on('cancel-screenshot', () => {
   if (overlayWindow) {
     overlayWindow.close();
   }
-  // Show the main window when capture is canceled
   if (mainWindow) {
     mainWindow.show();
   }

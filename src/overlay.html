@@ -10,7 +10,17 @@
       padding: 0;
       overflow: hidden;
       cursor: crosshair;
-      background: none;
+      background: transparent !important;
+    }
+    
+    #background-screenshot {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
     }
     
     .selection-box {
@@ -19,6 +29,7 @@
       background: rgba(0, 168, 255, 0.1);
       display: none;
       pointer-events: none;
+      z-index: 999;
     }
     
     .instruction {
@@ -36,22 +47,27 @@
   </style>
 </head>
 <body>
+  <img id="background-screenshot" draggable="false" style="display: none;">
   <div class="instruction">Click and drag to select area, press ESC to cancel</div>
   <div id="selection-box" class="selection-box"></div>
   
   <script>
     const selectionBox = document.getElementById('selection-box');
+    const backgroundScreenshot = document.getElementById('background-screenshot');
     let startX, startY, endX, endY;
     let isSelecting = false;
     
-    // Listen for key presses (ESC to cancel)
+    window.electronAPI.setBackgroundScreenshot((event, dataUrl) => {
+      backgroundScreenshot.src = dataUrl;
+      backgroundScreenshot.style.display = 'block';
+    });
+    
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         window.electronAPI.cancelScreenshot();
       }
     });
     
-    // Mouse events for selection
     document.addEventListener('mousedown', (e) => {
       isSelecting = true;
       startX = e.clientX;
@@ -90,7 +106,6 @@
         height: parseInt(selectionBox.style.height)
       };
       
-      // Only capture if we have a valid selection
       if (captureArea.width > 10 && captureArea.height > 10) {
         window.electronAPI.captureScreen(captureArea);
       } else {

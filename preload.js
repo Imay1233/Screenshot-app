@@ -1,15 +1,23 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, clipboard, nativeImage } = require('electron');
 
-// Expose protected methods that allow the renderer process to use
-// the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Main window functions
   captureScreen: (captureArea) => ipcRenderer.send('capture-screen', captureArea),
   startCapture: () => ipcRenderer.send('start-capture'),
   handleSourcesFetched: (callback) => ipcRenderer.on('sources-fetched', callback),
   saveScreenshot: (data) => ipcRenderer.invoke('save-screenshot', data),
-  showMainWindow: () => ipcRenderer.send('show-main-window'), // New method to show main window
-  
-  // Overlay window functions
-  cancelScreenshot: () => ipcRenderer.send('cancel-screenshot')
+  showMainWindow: () => ipcRenderer.send('show-main-window'),
+  copyImageToClipboard: (dataUrl) => {
+    try {
+      const image = nativeImage.createFromDataURL(dataUrl);
+      if (!image || image.isEmpty()) {
+        console.error('Failed to create native image from data URL');
+        return;
+      }
+      clipboard.writeImage(image);
+    } catch (error) {
+      console.error('Error copying image to clipboard:', error);
+    }
+  },
+  cancelScreenshot: () => ipcRenderer.send('cancel-screenshot'),
+  setBackgroundScreenshot: (callback) => ipcRenderer.on('set-background-screenshot', callback)
 });
