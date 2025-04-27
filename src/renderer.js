@@ -5,6 +5,7 @@ const captureBtn = document.getElementById('capture-btn');
 const saveBtn = document.getElementById('save-btn');
 const screenshotContainer = document.getElementById('screenshot-container');
 const placeholderText = document.querySelector('.placeholder-text');
+const imageFormatSelect = document.getElementById('image-format');
 
 // Store up to 10 screenshots in history
 let screenshotHistory = [];
@@ -15,10 +16,11 @@ saveBtn.addEventListener('click', saveScreenshot);
 
 // Start the capture process by sending a message to the main process
 function startCapture() {
-  // Get the selected modes from the toggles
+  // Get the selected modes and format from the toggles
   const selectionMode = document.querySelector('input[name="selection-mode"]:checked').value;
   const captureMode = document.querySelector('input[name="capture-mode"]:checked').value;
-  window.electronAPI.startCapture({ selectionMode, captureMode });
+  const imageFormat = imageFormatSelect.value;
+  window.electronAPI.startCapture({ selectionMode, captureMode, imageFormat });
 }
 
 // Update the preview panel with the current screenshot history
@@ -58,7 +60,7 @@ function updatePreview() {
 }
 
 // Handle the captured sources and create the screenshot
-window.electronAPI.handleSourcesFetched((event, sources, captureArea) => {
+window.electronAPI.handleSourcesFetched((event, sources, captureArea, imageFormat) => {
   const primarySource = sources[0];
   
   // Create a hidden video element to stream the desktop
@@ -111,7 +113,6 @@ window.electronAPI.handleSourcesFetched((event, sources, captureArea) => {
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
-          // Consider a frame non-blank if it has any pixel that isn't black (0,0,0) or white (255,255,255)
           if (!((r === 0 && g === 0 && b === 0) || (r === 255 && g === 255 && b === 255))) {
             isBlank = false;
             break;
@@ -122,8 +123,22 @@ window.electronAPI.handleSourcesFetched((event, sources, captureArea) => {
           console.log(`Frame is blank, retrying (${attempts + 1}/${maxAttempts})...`);
           setTimeout(() => captureFrame(attempts + 1, maxAttempts), 100);
         } else {
-          const dataUrl = canvas.toDataURL('image/png');
-          finalizeCapture(dataUrl);
+          let mimeType = `image/${imageFormat}`;
+          let quality = 1.0; // Default quality
+          if (imageFormat === 'jpeg') {
+            quality = 0.8; // JPEG quality (0.0 to 1.0)
+          } else if (imageFormat === 'webp') {
+            quality = 0.9; // WebP quality
+          }
+          // Note: AVIF support depends on the Electron/Chromium version
+          try {
+            const dataUrl = canvas.toDataURL(mimeType, quality);
+            finalizeCapture(dataUrl);
+          } catch (error) {
+            console.warn(`Failed to generate ${imageFormat}, falling back to PNG:`, error);
+            const dataUrl = canvas.toDataURL('image/png');
+            finalizeCapture(dataUrl);
+          }
         }
       }
       
@@ -157,7 +172,8 @@ window.electronAPI.handleSourcesFetched((event, sources, captureArea) => {
 async function saveScreenshot() {
   if (screenshotHistory.length === 0) return;
   
-  const result = await window.electronAPI.saveScreenshot(screenshotHistory[0]);
+  const imageFormat = imageFormatSelect.value;
+  const result = await window.electronAPI.saveScreenshot(screenshotHistory[0], imageFormat);
   
   if (result.success) {
     alert(`Screenshot saved to: ${result.filePath}`);

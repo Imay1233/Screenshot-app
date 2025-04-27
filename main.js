@@ -7,6 +7,7 @@ const isDev = require('electron-is-dev');
 // Global references to the main and overlay windows
 let mainWindow;
 let overlayWindow;
+let currentModes = { selectionMode: 'drag', captureMode: 'instant', imageFormat: 'png' }; // Store modes globally
 
 // Enable DevTools in development mode unless explicitly disabled
 const enableDevTools = isDev && process.env.ENABLE_DEVTOOLS !== 'false';
@@ -17,21 +18,18 @@ function createMainWindow() {
     width: 800,
     height: 600,
     webPreferences: {
-      nodeIntegration: false, // Disable Node.js integration in renderer for security
-      contextIsolation: true, // Enable context isolation for security
-      preload: path.join(__dirname, 'preload.js') // Load the preload script for safe IPC
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
-  // Load the main window HTML
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   
-  // Open DevTools in development mode
   if (enableDevTools) {
     mainWindow.webContents.openDevTools();
   }
 
-  // Clean up when the window is closed
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -56,44 +54,37 @@ async function createOverlayWindow(modes) {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
-  // Capture a screenshot to use as the background
   const screenshotDataUrl = await captureDesktopScreenshot();
 
-  // Create a fullscreen, transparent overlay window
   overlayWindow = new BrowserWindow({
     width,
     height,
-    transparent: true, // Make the window transparent
-    frame: false, // Remove window frame
-    fullscreen: true, // Make the window fullscreen
-    alwaysOnTop: true, // Keep the window on top of all other windows
-    resizable: false, // Disable resizing of the window
-    backgroundColor: '#00000000', // Fully transparent background
+    transparent: true,
+    frame: false,
+    fullscreen: true,
+    alwaysOnTop: true,
+    resizable: false,
+    backgroundColor: '#00000000',
     webPreferences: {
-      nodeIntegration: false, // Disable Node.js integration for security
-      contextIsolation: true, // Enable context isolation for security
-      preload: path.join(__dirname, 'preload.js') // Load the preload script
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
-  // Allow mouse events on the window
   overlayWindow.setIgnoreMouseEvents(false);
   
-  // Load the overlay HTML
   overlayWindow.loadFile(path.join(__dirname, 'src', 'overlay.html'));
   
-  // Send the screenshot data URL and modes to the overlay window after it loads
   overlayWindow.webContents.on('did-finish-load', () => {
     overlayWindow.webContents.send('set-background-screenshot', screenshotDataUrl);
     overlayWindow.webContents.send('set-modes', modes);
   });
   
-  // Open DevTools in development mode
   if (enableDevTools) {
     overlayWindow.webContents.openDevTools();
   }
 
-  // Clean up when the window is closed
   overlayWindow.on('closed', () => {
     overlayWindow = null;
   });
@@ -103,14 +94,11 @@ async function createOverlayWindow(modes) {
 app.whenReady().then(() => {
   createMainWindow();
   
-  // Register a global shortcut (Ctrl+Shift+X or Cmd+Shift+X) to start capture
   globalShortcut.register('CommandOrControl+Shift+X', () => {
     if (!overlayWindow && mainWindow) {
       mainWindow.hide();
-      // Use the currently selected modes (default to 'drag' and 'instant' if not set)
-      const selectionMode = document.querySelector('input[name="selection-mode"]:checked')?.value || 'drag';
-      const captureMode = document.querySelector('input[name="capture-mode"]:checked')?.value || 'instant';
-      createOverlayWindow({ selectionMode, captureMode });
+      // Use the last known modes or defaults
+      createOverlayWindow(currentModes);
     }
   });
 });
@@ -122,7 +110,7 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Recreate the main window if the app is activated (e.g., clicking the dock icon on macOS)
+// Recreate the main window if the app is activated
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createMainWindow();
@@ -142,10 +130,13 @@ ipcMain.on('capture-screen', async (event, captureArea) => {
     }
     
     if (captureArea && captureArea.width > 10 && captureArea.height > 10) {
-      mainWindow.webContents.send('sources-fetched', sources, captureArea);
+      mainWindow.webContents.send('sources-fetched', sources, captureArea, currentModes.imageFormat);
     }
   } catch (error) {
     console.error('Error capturing screen:', error);
+    if (mainWindow) {
+      mainWindow.show();
+    }
   }
 });
 
@@ -156,21 +147,23 @@ ipcMain.on('show-main-window', () => {
   }
 });
 
-// Start the capture process when requested, passing the selected modes
+// Start the capture process when requested, passing the selected modes and format
 ipcMain.on('start-capture', (event, modes) => {
   if (!overlayWindow && mainWindow) {
     mainWindow.hide();
+    currentModes = { ...currentModes, ...modes }; // Update stored modes
     createOverlayWindow(modes);
   }
 });
 
 // Save a screenshot to the downloads folder
-ipcMain.handle('save-screenshot', async (event, data) => {
+ipcMain.handle('save-screenshot', async (event, data, imageFormat) => {
   const downloadsPath = app.getPath('downloads');
   const timestamp = new Date().toISOString().replace(/:/g, '-');
-  const filePath = path.join(downloadsPath, `screenshot-${timestamp}.png`);
+  const extension = imageFormat === 'jpeg' ? 'jpg' : imageFormat;
+  const filePath = path.join(downloadsPath, `screenshot-${timestamp}.${extension}`);
   
-  const base64Data = data.replace(/^data:image\/png;base64,/, '');
+  const base64Data = data.replace(/^data:image\/[a-z]+;base64,/, '');
   
   try {
     fs.writeFileSync(filePath, base64Data, 'base64');

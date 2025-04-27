@@ -58,21 +58,20 @@
       position: absolute;
       top: 5px;
       right: 5px;
-      background: white; /* White background for the circle */
-      color: black; /* Black X */
-      border: 1px solid #ccc; /* Light border for contrast */
-      border-radius: 50%; /* Circular shape */
-      width: 24px; /* Slightly larger for better appearance */
+      background: white;
+      color: black;
+      border: 1px solid #ccc;
+      border-radius: 50%;
+      width: 24px;
       height: 24px;
       cursor: pointer;
-      font-size: 16px; /* Larger X for clarity */
-      font-weight: bold; /* Make the X bold */
-      line-height: 22px; /* Center the X vertically */
+      font-size: 16px;
+      font-weight: bold;
+      line-height: 22px;
       text-align: center;
-      display: none; /* Hidden by default */
+      display: none;
     }
 
-    /* Show the delete button only on hover */
     .screenshot-wrapper:hover .delete-btn {
       display: block;
     }
@@ -86,19 +85,25 @@
       display: none;
     }
 
-    /* Selection method toggle styles */
-    .selection-method, .capture-mode {
+    .selection-method, .capture-mode, .image-format {
       margin: 10px 0;
       text-align: center;
     }
 
-    .selection-method label, .capture-mode label {
+    .selection-method label, .capture-mode label, .image-format label {
       margin: 0 10px;
       font-size: 14px;
     }
 
     .selection-method input[type="radio"], .capture-mode input[type="radio"] {
       margin-right: 5px;
+    }
+
+    .image-format select {
+      padding: 5px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
@@ -129,10 +134,21 @@
       </label>
     </div>
     
+    <!-- Image format selection -->
+    <div class="image-format">
+      <h3>Image format</h3>
+      <select id="image-format">
+        <option value="png" selected>PNG</option>
+        <option value="jpeg">JPEG</option>
+        <option value="webp">WebP</option>
+        <option value="avif">AVIF</option>
+      </select>
+    </div>
+    
     <button id="save-btn" disabled>Save Recent Screenshot</button>
     <div id="screenshot-container"></div>
     <p class="placeholder-text">No screenshots yet. Click "Take Screenshot" to capture one.</p>
   </div>
   <script src="renderer.js"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'936e434dde431363',t:'MTc0NTc1NjMxMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width整備=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
