@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   captureScreen: (captureArea) => ipcRenderer.send('capture-screen', captureArea),
   
   // Trigger the start of the capture process by sending a message to the main process
-  startCapture: () => ipcRenderer.send('start-capture'),
+  startCapture: (modes) => ipcRenderer.send('start-capture', modes),
   
   // Listen for the sources-fetched event from the main process to receive screen sources
   handleSourcesFetched: (callback) => ipcRenderer.on('sources-fetched', callback),
@@ -31,7 +31,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelScreenshot: () => ipcRenderer.send('cancel-screenshot'),
   
   // Receive the background screenshot data URL for the overlay window
-  setBackgroundScreenshot: (callback) => ipcRenderer.on('set-background-screenshot', callback)
+  setBackgroundScreenshot: (callback) => ipcRenderer.on('set-background-screenshot', callback),
+  
+  // Receive the selection and capture modes for the overlay window
+  setModes: (callback) => ipcRenderer.on('set-modes', callback)
 });
 
 // End of preload.js

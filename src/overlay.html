@@ -5,100 +5,399 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Screen Capture Overlay</title>
   <style>
+    /* Reset default styles and set up the overlay window */
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      cursor: crosshair;
-      background: transparent !important;
+      cursor: crosshair; /* Default cursor for drawing */
+      background: transparent !important; /* Ensure the background is transparent */
+      user-select: none; /* Prevent text selection */
     }
     
+    /* Background screenshot styles */
     #background-screenshot {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover;
-      z-index: 1;
+      object-fit: cover; /* Ensure the screenshot covers the entire window */
+      z-index: 1; /* Place the screenshot behind the selection box and instruction */
     }
     
+    /* Selection box styles */
     .selection-box {
       position: absolute;
-      border: 2px dashed #00a8ff;
-      background: rgba(0, 168, 255, 0.1);
-      display: none;
-      pointer-events: none;
-      z-index: 999;
+      border: 2px dashed #00a8ff; /* Blue dashed border for the selection box */
+      background: rgba(0, 168, 255, 0.1); /* Light blue transparent background */
+      display: none; /* Hidden by default */
+      pointer-events: none; /* Allow mouse events to pass through the selection box during drawing */
+      z-index: 999; /* Ensure the selection box is on top */
+      box-sizing: border-box; /* Ensure border width doesn't affect dimensions */
     }
     
+    /* Instruction text styles */
     .instruction {
       position: fixed;
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.8); /* Semi-transparent black background */
       color: white;
       padding: 10px 20px;
       border-radius: 4px;
       font-family: Arial, sans-serif;
-      z-index: 999;
+      z-index: 999; /* Ensure the instruction is on top */
+    }
+    
+    /* Save button styles */
+    .save-btn {
+      position: absolute;
+      background: #28a745; /* Green background */
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      z-index: 1000; /* Ensure the button is on top */
+      display: none; /* Hidden by default */
+    }
+    
+    .save-btn:hover {
+      background: #218838; /* Darker green on hover */
     }
   </style>
 </head>
 <body>
+  <!-- Background screenshot image (set via JavaScript) -->
   <img id="background-screenshot" draggable="false" style="display: none;">
-  <div class="instruction">Click and drag to select area, press ESC to cancel</div>
+  
+  <!-- Instruction text for the user (updated dynamically) -->
+  <div id="instruction" class="instruction"></div>
+  
+  <!-- Selection box element (drawn dynamically) -->
   <div id="selection-box" class="selection-box"></div>
   
+  <!-- Save button for Resize Mode -->
+  <button id="save-btn" class="save-btn">Save</button>
+  
   <script>
+    // Get references to DOM elements
     const selectionBox = document.getElementById('selection-box');
+    const instructionText = document.getElementById('instruction');
     const backgroundScreenshot = document.getElementById('background-screenshot');
+    const saveBtn = document.getElementById('save-btn');
     let startX, startY, endX, endY;
     let isSelecting = false;
+    let selectionMode = 'drag'; // Default to drag mode
+    let captureMode = 'instant'; // Default to instant mode
+    let clickCount = 0; // Track the number of clicks in Click Mode
+    let isEditing = false; // Track if we're in Resize Mode editing phase
+    let isMoving = false; // Track if we're moving the selection box
+    let isResizing = false; // Track if we're resizing the selection box
+    let resizeEdge = null; // Track which edge/corner we're resizing
+    let moveOffsetX, moveOffsetY; // Track the offset for moving the selection box
+    let fixedRight, fixedBottom; // Store the fixed opposite edges during resize
+    const borderWidth = 2; // Border width of the selection box (2px on each side)
+    const edgeSize = 5; // Size of the resize area around edges
+    const cornerSize = 10; // Larger size for corner detection to be more forgiving
     
+    // Prevent dragging of the background image
+    backgroundScreenshot.addEventListener('dragstart', (e) => {
+      e.preventDefault();
+    });
+    
+    // Receive the background screenshot data URL from the main process and display it
     window.electronAPI.setBackgroundScreenshot((event, dataUrl) => {
       backgroundScreenshot.src = dataUrl;
       backgroundScreenshot.style.display = 'block';
     });
     
+    // Receive the selection and capture modes and update the UI
+    window.electronAPI.setModes((event, modes) => {
+      selectionMode = modes.selectionMode;
+      captureMode = modes.captureMode;
+      // Update instruction text based on the modes
+      if (selectionMode === 'drag') {
+        instructionText.textContent = captureMode === 'instant'
+          ? 'Click and drag to select area, press ESC or RMB to cancel'
+          : 'Click and drag to select area, then adjust and save, press ESC or RMB to cancel';
+      } else {
+        instructionText.textContent = captureMode === 'instant'
+          ? 'Click to start selection, click again to capture, press ESC or RMB to cancel'
+          : 'Click to start selection, click again to adjust and save, press ESC or RMB to cancel';
+      }
+    });
+    
+    // Handle ESC key to cancel the capture
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        resetSelection();
         window.electronAPI.cancelScreenshot();
       }
     });
     
+    // Handle right-click (RMB) to cancel the selection
+    document.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); // Prevent the default context menu
+      resetSelection();
+    });
+    
+    // Start drawing the selection box on mouse down (both modes)
     document.addEventListener('mousedown', (e) => {
-      isSelecting = true;
-      startX = e.clientX;
-      startY = e.clientY;
+      if (e.button !== 0) return; // Ignore non-LMB clicks
       
-      selectionBox.style.left = `${startX}px`;
-      selectionBox.style.top = `${startY}px`;
-      selectionBox.style.width = '0';
-      selectionBox.style.height = '0';
-      selectionBox.style.display = 'block';
+      if (isEditing) {
+        // In Resize Mode, check if we're moving or resizing the selection box
+        const rect = selectionBox.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        // Store the fixed opposite edges before resizing (adjust for border width)
+        const currentLeft = parseInt(selectionBox.style.left);
+        const currentTop = parseInt(selectionBox.style.top);
+        const currentWidth = parseInt(selectionBox.style.width);
+        const currentHeight = parseInt(selectionBox.style.height);
+        fixedRight = currentLeft + currentWidth; // Exclude border width
+        fixedBottom = currentTop + currentHeight; // Exclude border width
+        
+        // Determine if we're on an edge (use edgeSize for precision)
+        const onLeftEdge = x >= rect.left - edgeSize && x <= rect.left && y >= rect.top && y <= rect.bottom;
+        const onRightEdge = x >= rect.right && x <= rect.right + edgeSize && y >= rect.top && y <= rect.bottom;
+        const onTopEdge = y >= rect.top - edgeSize && y <= rect.top && x >= rect.left && x <= rect.right;
+        const onBottomEdge = y >= rect.bottom && y <= rect.bottom + edgeSize && x >= rect.left && x <= rect.right;
+        
+        // Determine if we're on a corner (use cornerSize for a larger, more forgiving area)
+        const onTopLeftCorner = x >= rect.left - cornerSize && x <= rect.left + cornerSize && y >= rect.top - cornerSize && y <= rect.top + cornerSize;
+        const onTopRightCorner = x >= rect.right - cornerSize && x <= rect.right + cornerSize && y >= rect.top - cornerSize && y <= rect.top + cornerSize;
+        const onBottomLeftCorner = x >= rect.left - cornerSize && x <= rect.left + cornerSize && y >= rect.bottom - cornerSize && y <= rect.bottom + cornerSize;
+        const onBottomRightCorner = x >= rect.right - cornerSize && x <= rect.right + cornerSize && y >= rect.bottom - cornerSize && y <= rect.bottom + cornerSize;
+        
+        // Prioritize corners over edges
+        if (onTopLeftCorner) {
+          isResizing = true;
+          resizeEdge = 'top-left';
+        } else if (onTopRightCorner) {
+          isResizing = true;
+          resizeEdge = 'top-right';
+        } else if (onBottomLeftCorner) {
+          isResizing = true;
+          resizeEdge = 'bottom-left';
+        } else if (onBottomRightCorner) {
+          isResizing = true;
+          resizeEdge = 'bottom-right';
+        } else if (onLeftEdge) {
+          isResizing = true;
+          resizeEdge = 'left';
+        } else if (onRightEdge) {
+          isResizing = true;
+          resizeEdge = 'right';
+        } else if (onTopEdge) {
+          isResizing = true;
+          resizeEdge = 'top';
+        } else if (onBottomEdge) {
+          isResizing = true;
+          resizeEdge = 'bottom';
+        } else if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          // Inside the selection box: Start moving
+          isMoving = true;
+          moveOffsetX = x - rect.left;
+          moveOffsetY = y - rect.top;
+        }
+        return;
+      }
+      
+      if (selectionMode === 'drag') {
+        // Drag Mode: Start drawing on mousedown
+        isSelecting = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        selectionBox.style.left = `${startX}px`;
+        selectionBox.style.top = `${startY}px`;
+        selectionBox.style.width = '0';
+        selectionBox.style.height = '0';
+        selectionBox.style.display = 'block';
+      } else if (selectionMode === 'click') {
+        clickCount++;
+        
+        if (clickCount === 1) {
+          // Click Mode: First mousedown sets the starting point
+          isSelecting = true;
+          startX = e.clientX;
+          startY = e.clientY;
+          
+          selectionBox.style.left = `${startX}px`;
+          selectionBox.style.top = `${startY}px`;
+          selectionBox.style.width = '0';
+          selectionBox.style.height = '0';
+          selectionBox.style.display = 'block';
+        } else if (clickCount === 2) {
+          // Click Mode: Second mousedown
+          isSelecting = false;
+          clickCount = 0; // Reset for the next capture
+          
+          if (captureMode === 'instant') {
+            captureScreenshot();
+          } else {
+            enterEditMode();
+          }
+        }
+      }
     });
     
+    // Update the selection box dimensions as the mouse moves
     document.addEventListener('mousemove', (e) => {
-      if (!isSelecting) return;
-      
-      endX = e.clientX;
-      endY = e.clientY;
-      
-      const width = Math.abs(endX - startX);
-      const height = Math.abs(endY - startY);
-      
-      selectionBox.style.left = `${Math.min(startX, endX)}px`;
-      selectionBox.style.top = `${Math.min(startY, endY)}px`;
-      selectionBox.style.width = `${width}px`;
-      selectionBox.style.height = `${height}px`;
+      if (isSelecting) {
+        // Drawing the initial selection box
+        endX = e.clientX;
+        endY = e.clientY;
+        
+        const width = Math.abs(endX - startX);
+        const height = Math.abs(endY - startY);
+        
+        selectionBox.style.left = `${Math.min(startX, endX)}px`;
+        selectionBox.style.top = `${Math.min(startY, endY)}px`;
+        selectionBox.style.width = `${width}px`;
+        selectionBox.style.height = `${height}px`;
+      } else if (isMoving) {
+        // Moving the selection box in Resize Mode
+        const newLeft = e.clientX - moveOffsetX;
+        const newTop = e.clientY - moveOffsetY;
+        selectionBox.style.left = `${newLeft}px`;
+        selectionBox.style.top = `${newTop}px`;
+        updateSaveButtonPosition();
+      } else if (isResizing) {
+        // Resizing the selection box in Resize Mode
+        let newLeft = parseInt(selectionBox.style.left);
+        let newTop = parseInt(selectionBox.style.top);
+        let newWidth = parseInt(selectionBox.style.width);
+        let newHeight = parseInt(selectionBox.style.height);
+        
+        // Use fixedRight and fixedBottom to keep opposite edges/corners stationary
+        if (resizeEdge === 'top-left') {
+          newLeft = e.clientX;
+          newTop = e.clientY;
+          newWidth = fixedRight - newLeft;
+          newHeight = fixedBottom - newTop;
+        } else if (resizeEdge === 'top-right') {
+          newTop = e.clientY;
+          newWidth = e.clientX - newLeft;
+          newHeight = fixedBottom - newTop;
+        } else if (resizeEdge === 'bottom-left') {
+          newLeft = e.clientX;
+          newWidth = fixedRight - newLeft;
+          newHeight = e.clientY - newTop;
+        } else if (resizeEdge === 'bottom-right') {
+          newWidth = e.clientX - newLeft;
+          newHeight = e.clientY - newTop;
+        } else if (resizeEdge === 'left') {
+          newLeft = e.clientX;
+          newWidth = fixedRight - newLeft;
+        } else if (resizeEdge === 'right') {
+          newWidth = e.clientX - newLeft;
+        } else if (resizeEdge === 'top') {
+          newTop = e.clientY;
+          newHeight = fixedBottom - newTop;
+        } else if (resizeEdge === 'bottom') {
+          newHeight = e.clientY - newTop;
+        }
+        
+        // Ensure minimum size
+        newWidth = Math.max(newWidth, 10);
+        newHeight = Math.max(newHeight, 10);
+        
+        selectionBox.style.left = `${newLeft}px`;
+        selectionBox.style.top = `${newTop}px`;
+        selectionBox.style.width = `${newWidth}px`;
+        selectionBox.style.height = `${newHeight}px`;
+        updateSaveButtonPosition();
+      } else if (captureMode === 'resize' && selectionBox.style.display !== 'none') {
+        // Update cursor based on mouse position in Resize Mode
+        const rect = selectionBox.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        // Detect edges (use edgeSize for precision)
+        const onLeftEdge = x >= rect.left - edgeSize && x <= rect.left && y >= rect.top && y <= rect.bottom;
+        const onRightEdge = x >= rect.right && x <= rect.right + edgeSize && y >= rect.top && y <= rect.bottom;
+        const onTopEdge = y >= rect.top - edgeSize && y <= rect.top && x >= rect.left && x <= rect.right;
+        const onBottomEdge = y >= rect.bottom && y <= rect.bottom + edgeSize && x >= rect.left && x <= rect.right;
+        
+        // Detect corners (use cornerSize for a larger, more forgiving area)
+        const onTopLeftCorner = x >= rect.left - cornerSize && x <= rect.left + cornerSize && y >= rect.top - cornerSize && y <= rect.top + cornerSize;
+        const onTopRightCorner = x >= rect.right - cornerSize && x <= rect.right + cornerSize && y >= rect.top - cornerSize && y <= rect.top + cornerSize;
+        const onBottomLeftCorner = x >= rect.left - cornerSize && x <= rect.left + cornerSize && y >= rect.bottom - cornerSize && y <= rect.bottom + cornerSize;
+        const onBottomRightCorner = x >= rect.right - cornerSize && x <= rect.right + cornerSize && y >= rect.bottom - cornerSize && y <= rect.bottom + cornerSize;
+        
+        // Prioritize corners over edges
+        if (onTopLeftCorner || onBottomRightCorner) {
+          document.body.style.cursor = 'nwse-resize';
+        } else if (onTopRightCorner || onBottomLeftCorner) {
+          document.body.style.cursor = 'nesw-resize';
+        } else if (onLeftEdge || onRightEdge) {
+          document.body.style.cursor = 'ew-resize';
+        } else if (onTopEdge || onBottomEdge) {
+          document.body.style.cursor = 'ns-resize';
+        } else if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          document.body.style.cursor = 'move';
+        } else {
+          document.body.style.cursor = 'crosshair';
+        }
+      }
     });
     
-    document.addEventListener('mouseup', () => {
-      if (!isSelecting) return;
+    // Finalize the selection on mouse up (Drag Mode or Resize Mode)
+    document.addEventListener('mouseup', (e) => {
+      if (e.button !== 0) return;
+      
+      if (isMoving || isResizing) {
+        // Stop moving or resizing
+        isMoving = false;
+        isResizing = false;
+        resizeEdge = null;
+        return;
+      }
+      
+      if (selectionMode !== 'drag' || !isSelecting) return;
+      
+      // Drag Mode: Finish initial drawing
       isSelecting = false;
       
+      if (selectionBox.style.display !== 'none') {
+        if (captureMode === 'instant') {
+          captureScreenshot();
+        } else {
+          enterEditMode();
+        }
+      }
+    });
+    
+    // Save the screenshot when the Save button is clicked
+    saveBtn.addEventListener('click', () => {
+      captureScreenshot();
+    });
+    
+    // Helper function to enter Resize Mode editing phase
+    function enterEditMode() {
+      isEditing = true;
+      selectionBox.style.pointerEvents = 'auto'; // Allow clicking on the selection box
+      updateSaveButtonPosition();
+      saveBtn.style.display = 'block';
+    }
+    
+    // Helper function to update the Save button position
+    function updateSaveButtonPosition() {
+      const rect = selectionBox.getBoundingClientRect();
+      saveBtn.style.left = `${rect.right}px`;
+      saveBtn.style.top = `${rect.bottom + 5}px`; // 5px below the bottom-right corner
+    }
+    
+    // Helper function to capture the screenshot and reset the selection
+    function captureScreenshot() {
       const captureArea = {
         x: parseInt(selectionBox.style.left),
         y: parseInt(selectionBox.style.top),
@@ -106,12 +405,29 @@
         height: parseInt(selectionBox.style.height)
       };
       
+      // Only capture if the selection area is larger than 10x10 pixels
       if (captureArea.width > 10 && captureArea.height > 10) {
         window.electronAPI.captureScreen(captureArea);
       } else {
         window.electronAPI.cancelScreenshot();
       }
-    });
+      
+      resetSelection();
+    }
+    
+    // Helper function to reset the selection state
+    function resetSelection() {
+      isSelecting = false;
+      isEditing = false;
+      isMoving = false;
+      isResizing = false;
+      resizeEdge = null;
+      clickCount = 0;
+      selectionBox.style.display = 'none';
+      selectionBox.style.pointerEvents = 'none';
+      saveBtn.style.display = 'none';
+      document.body.style.cursor = 'crosshair';
+    }
   </script>
 </body>
 </html>

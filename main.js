@@ -52,7 +52,7 @@ async function captureDesktopScreenshot() {
 }
 
 // Create the overlay window for selecting the capture area
-async function createOverlayWindow() {
+async function createOverlayWindow(modes) {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
@@ -82,9 +82,10 @@ async function createOverlayWindow() {
   // Load the overlay HTML
   overlayWindow.loadFile(path.join(__dirname, 'src', 'overlay.html'));
   
-  // Send the screenshot data URL to the overlay window after it loads
+  // Send the screenshot data URL and modes to the overlay window after it loads
   overlayWindow.webContents.on('did-finish-load', () => {
     overlayWindow.webContents.send('set-background-screenshot', screenshotDataUrl);
+    overlayWindow.webContents.send('set-modes', modes);
   });
   
   // Open DevTools in development mode
@@ -106,7 +107,10 @@ app.whenReady().then(() => {
   globalShortcut.register('CommandOrControl+Shift+X', () => {
     if (!overlayWindow && mainWindow) {
       mainWindow.hide();
-      createOverlayWindow();
+      // Use the currently selected modes (default to 'drag' and 'instant' if not set)
+      const selectionMode = document.querySelector('input[name="selection-mode"]:checked')?.value || 'drag';
+      const captureMode = document.querySelector('input[name="capture-mode"]:checked')?.value || 'instant';
+      createOverlayWindow({ selectionMode, captureMode });
     }
   });
 });
@@ -152,11 +156,11 @@ ipcMain.on('show-main-window', () => {
   }
 });
 
-// Start the capture process when requested
-ipcMain.on('start-capture', () => {
+// Start the capture process when requested, passing the selected modes
+ipcMain.on('start-capture', (event, modes) => {
   if (!overlayWindow && mainWindow) {
     mainWindow.hide();
-    createOverlayWindow();
+    createOverlayWindow(modes);
   }
 });
 

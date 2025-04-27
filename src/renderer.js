@@ -15,7 +15,10 @@ saveBtn.addEventListener('click', saveScreenshot);
 
 // Start the capture process by sending a message to the main process
 function startCapture() {
-  window.electronAPI.startCapture();
+  // Get the selected modes from the toggles
+  const selectionMode = document.querySelector('input[name="selection-mode"]:checked').value;
+  const captureMode = document.querySelector('input[name="capture-mode"]:checked').value;
+  window.electronAPI.startCapture({ selectionMode, captureMode });
 }
 
 // Update the preview panel with the current screenshot history

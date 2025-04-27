@@ -3,45 +3,136 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Electron Screenshot App</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Screenshot App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f0f0;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #007bff;
+      color: white;
+    }
+
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    #screenshot-container {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .screenshot-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .screenshot {
+      max-width: 200px;
+      max-height: 200px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .delete-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background: white; /* White background for the circle */
+      color: black; /* Black X */
+      border: 1px solid #ccc; /* Light border for contrast */
+      border-radius: 50%; /* Circular shape */
+      width: 24px; /* Slightly larger for better appearance */
+      height: 24px;
+      cursor: pointer;
+      font-size: 16px; /* Larger X for clarity */
+      font-weight: bold; /* Make the X bold */
+      line-height: 22px; /* Center the X vertically */
+      text-align: center;
+      display: none; /* Hidden by default */
+    }
+
+    /* Show the delete button only on hover */
+    .screenshot-wrapper:hover .delete-btn {
+      display: block;
+    }
+
+    .placeholder-text {
+      color: #888;
+      font-style: italic;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* Selection method toggle styles */
+    .selection-method, .capture-mode {
+      margin: 10px 0;
+      text-align: center;
+    }
+
+    .selection-method label, .capture-mode label {
+      margin: 0 10px;
+      font-size: 14px;
+    }
+
+    .selection-method input[type="radio"], .capture-mode input[type="radio"] {
+      margin-right: 5px;
+    }
+  </style>
 </head>
 <body>
-  <div class="app">
-    <header>
-      <h1>Screenshot Capture App</h1>
-    </header>
+  <div class="container">
+    <h1>Screenshot App</h1>
+    <button id="capture-btn">Take Screenshot</button>
     
-    <main>
-      <div class="instruction-panel">
-        <h2>How to use:</h2>
-        <ol>
-          <li>Press <kbd>Ctrl+Shift+X</kbd> (or <kbd>Cmd+Shift+X</kbd> on Mac) to start capture</li>
-          <li>Draw a rectangle on your screen to select the area</li>
-          <li>The screenshot will appear below (up to 10 stored)</li>
-          <li>Press the save button to save the most recent to your downloads folder</li>
-          <li>Click the X on a screenshot to delete it</li>
-          <li>Drag a screenshot to copy it to your clipboard</li>
-        </ol>
-        <button id="capture-btn" class="btn primary">Take Screenshot</button>
-      </div>
-      
-      <div class="preview-panel">
-        <h2>Preview:</h2>
-        <div id="screenshot-container" class="screenshot-container">
-          <p class="placeholder-text">Your screenshots will appear here</p>
-        </div>
-        <div class="actions">
-          <button id="save-btn" class="btn" disabled>Save Most Recent Screenshot</button>
-        </div>
-      </div>
-    </main>
+    <!-- Selection method toggle section -->
+    <div class="selection-method">
+      <h3>Selection method</h3>
+      <label>
+        <input type="radio" name="selection-mode" value="drag" checked> Drag mode
+      </label>
+      <label>
+        <input type="radio" name="selection-mode" value="click"> Click mode
+      </label>
+    </div>
     
-    <footer>
-      <p>Press ESC to cancel capture</p>
-    </footer>
+    <!-- Capture mode toggle section -->
+    <div class="capture-mode">
+      <h3>Capture mode</h3>
+      <label>
+        <input type="radio" name="capture-mode" value="instant" checked> Instant mode
+      </label>
+      <label>
+        <input type="radio" name="capture-mode" value="resize"> Resize mode
+      </label>
+    </div>
+    
+    <button id="save-btn" disabled>Save Recent Screenshot</button>
+    <div id="screenshot-container"></div>
+    <p class="placeholder-text">No screenshots yet. Click "Take Screenshot" to capture one.</p>
   </div>
-
   <script src="renderer.js"></script>
 </body>
 </html>
